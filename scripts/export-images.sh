@@ -37,16 +37,21 @@ err()   { echo -e "${RED}✗${NC} $*" >&2; }
 
 # ─── Parse flags ──────────────────────────────────────────
 #
-# Defaults: 1920x1080 PNG (full HD landscape — slide's native aspect)
-# --compact:  1280x720  (HD landscape, smaller files)
-# --portrait: 1080x1920 (9:16 vertical canvas; slide centered with letterboxing)
-# --square:   1080x1080 (1:1 canvas;       slide centered with letterboxing)
+# The output resolution is always VIEWPORT_W * DPR  by  VIEWPORT_H * DPR.
+# Setting the viewport below the deck's mobile breakpoint (usually 600px)
+# makes the deck's responsive CSS reflow content for the smaller frame —
+# so portrait/square modes capture a real vertical layout, not a tiny
+# landscape screenshot floating in letterbox bars.
+#
+# Defaults: 1920x1080 PNG   (full HD landscape — slide's native aspect)
+# --compact:  1280x720      (HD landscape, smaller files)
+# --portrait: 540x960 @ 2x  = 1080x1920 (9:16, mobile CSS active)
+# --square:   540x540 @ 2x  = 1080x1080 (1:1,  mobile CSS active)
 # --format:   png (default) or jpeg
 
 VIEWPORT_W=1920
 VIEWPORT_H=1080
-CANVAS_W=0       # 0 = no canvas wrap (output = raw screenshot)
-CANVAS_H=0
+DPR=1
 FORMAT="png"
 MODE="landscape"
 
@@ -59,15 +64,19 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --portrait)
-            # Capture at native 1920x1080, then wrap into a 1080x1920 canvas
-            CANVAS_W=1080
-            CANVAS_H=1920
+            # Render the deck IN a 9:16 phone viewport so responsive CSS
+            # reflows it for vertical. DPR=2 doubles output to 1080x1920.
+            VIEWPORT_W=540
+            VIEWPORT_H=960
+            DPR=2
             MODE="portrait"
             shift
             ;;
         --square)
-            CANVAS_W=1080
-            CANVAS_H=1080
+            # Same idea but 1:1 — render at 540x540, captured at 1080x1080.
+            VIEWPORT_W=540
+            VIEWPORT_H=540
+            DPR=2
             MODE="square"
             shift
             ;;
@@ -161,10 +170,13 @@ cat > "$TEMP_SCRIPT" << 'EXPORT_SCRIPT'
 // export-images.mjs — Capture each slide as a standalone image.
 //
 // 1. Starts a local HTTP server (fonts/assets need HTTP)
-// 2. Loads the deck in headless Chromium at the chosen viewport
+// 2. Loads the deck in headless Chromium at the chosen viewport and DPR
 // 3. Walks every .slide, forces .reveal animations to their final state
-// 4. Screenshots each slide
-// 5. (Optional) Wraps each capture in a vertical/square canvas for socials
+// 4. Screenshots each slide at viewport_w*dpr by viewport_h*dpr pixels
+//
+// For portrait/square modes the viewport is set narrow enough that the
+// deck's responsive CSS reflows for mobile (usually <=600px). DPR=2
+// then doubles the output to a retina-sharp 1080-wide image.
 
 import { chromium } from 'playwright';
 import { createServer } from 'http';
@@ -176,11 +188,8 @@ const HTML_FILE  = process.argv[3];
 const OUT_DIR    = process.argv[4];
 const VP_W       = parseInt(process.argv[5]) || 1920;
 const VP_H       = parseInt(process.argv[6]) || 1080;
-const CANVAS_W   = parseInt(process.argv[7]) || 0;
-const CANVAS_H   = parseInt(process.argv[8]) || 0;
-const FORMAT     = (process.argv[9] || 'png').toLowerCase();
-
-const WRAP = CANVAS_W > 0 && CANVAS_H > 0;
+const DPR        = parseFloat(process.argv[7]) || 1;
+const FORMAT     = (process.argv[8] || 'png').toLowerCase();
 
 // ─── Static file server ───────────────────────────────────
 
@@ -215,7 +224,10 @@ console.log(`  Local server on port ${port}`);
 // ─── Open deck + count slides ─────────────────────────────
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: VP_W, height: VP_H } });
+const page = await browser.newPage({
+  viewport: { width: VP_W, height: VP_H },
+  deviceScaleFactor: DPR,
+});
 
 await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' });
 await page.evaluate(() => document.fonts.ready);
@@ -238,46 +250,38 @@ mkdirSync(OUT_DIR, { recursive: true });
 const rawPaths = [];
 const ext = FORMAT === 'jpeg' ? 'jpg' : 'png';
 
+// Mark every slide as .visible upfront so .reveal transitions don't
+// leave delayed-staggered items invisible at screenshot time. Force
+// each .reveal element's inline styles to their final state too —
+// belt + suspenders against any preset that uses different selectors.
+await page.evaluate(() => {
+  document.querySelectorAll('.slide').forEach(s => s.classList.add('visible'));
+  document.querySelectorAll('.reveal').forEach(el => {
+    el.style.opacity = '1';
+    el.style.transform = 'none';
+    el.style.visibility = 'visible';
+    el.style.filter = 'none';
+  });
+});
+
+// Let layout settle after the bulk style change.
+await page.waitForTimeout(400);
+
 for (let i = 0; i < slideCount; i++) {
-  // Show the target slide, hide the others.
+  // Scroll the target slide into view. Scroll-snap will lock it to
+  // the top of the viewport. We don't hide siblings — that breaks
+  // layout in decks that size grids relative to ancestor heights.
   await page.evaluate((index) => {
     const slides = document.querySelectorAll('.slide');
-    slides.forEach((slide, idx) => {
-      if (idx === index) {
-        slide.style.display = '';
-        slide.style.opacity = '1';
-        slide.style.visibility = 'visible';
-        slide.style.position = 'relative';
-        slide.style.transform = 'none';
-        slide.classList.add('active');
-      } else {
-        slide.style.display = 'none';
-        slide.classList.remove('active');
-      }
-    });
+    slides[index]?.scrollIntoView({ behavior: 'instant', block: 'start' });
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === index));
     if (window.presentation && typeof window.presentation.goToSlide === 'function') {
       window.presentation.goToSlide(index);
     }
-    slides[index]?.scrollIntoView({ behavior: 'instant' });
   }, i);
 
-  await page.waitForTimeout(300);
-
-  // Force every .reveal in the active slide to its final visible state —
-  // we want the FULL animated layout, not the pre-animation snapshot.
-  await page.evaluate((index) => {
-    const slides = document.querySelectorAll('.slide');
-    const current = slides[index];
-    if (!current) return;
-    current.classList.add('visible');
-    current.querySelectorAll('.reveal').forEach(el => {
-      el.style.opacity = '1';
-      el.style.transform = 'none';
-      el.style.visibility = 'visible';
-    });
-  }, i);
-
-  await page.waitForTimeout(200);
+  // Wait for scroll/snap to complete.
+  await page.waitForTimeout(250);
 
   const filename = `slide-${String(i + 1).padStart(3, '0')}.${ext}`;
   const outPath = join(OUT_DIR, filename);
@@ -295,52 +299,6 @@ for (let i = 0; i < slideCount; i++) {
 }
 
 await browser.close();
-
-// ─── Optional: wrap each capture in a portrait/square canvas ───
-// We do this in-browser by loading a tiny HTML page that draws the
-// screenshot centered on the target canvas — avoids needing a native
-// image library like sharp/imagemagick.
-
-if (WRAP) {
-  console.log(`  Wrapping to ${CANVAS_W}x${CANVAS_H} canvas (${FORMAT})...`);
-
-  const wrapBrowser = await chromium.launch();
-  const wrapPage = await wrapBrowser.newPage({
-    viewport: { width: CANVAS_W, height: CANVAS_H },
-  });
-
-  // Probe the deck's body background — gives us a sensible fill color so
-  // letterbox bars feel like the deck instead of pure black.
-  const bgColor = await (async () => {
-    const probe = await wrapBrowser.newPage({ viewport: { width: VP_W, height: VP_H } });
-    await probe.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' });
-    const c = await probe.evaluate(() => {
-      const bg = getComputedStyle(document.body).backgroundColor;
-      return bg && bg !== 'rgba(0, 0, 0, 0)' ? bg : '#0a0a0a';
-    });
-    await probe.close();
-    return c;
-  })();
-
-  for (const p of rawPaths) {
-    const imgData = readFileSync(p).toString('base64');
-    const mime = FORMAT === 'jpeg' ? 'image/jpeg' : 'image/png';
-    const html = `<!DOCTYPE html><html><head><style>
-      html, body { margin: 0; padding: 0; width: ${CANVAS_W}px; height: ${CANVAS_H}px; background: ${bgColor}; overflow: hidden; }
-      .frame { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-      img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-    </style></head><body><div class="frame"><img src="data:${mime};base64,${imgData}" /></div></body></html>`;
-
-    await wrapPage.setContent(html, { waitUntil: 'load' });
-
-    const shotOpts = { path: p, fullPage: false, type: FORMAT };
-    if (FORMAT === 'jpeg') shotOpts.quality = 92;
-    await wrapPage.screenshot(shotOpts);
-  }
-
-  await wrapBrowser.close();
-}
-
 server.close();
 
 console.log(`  ✓ ${rawPaths.length} image(s) written to: ${OUT_DIR}`);
@@ -376,18 +334,23 @@ echo ""
 
 # ─── Step 4: Run the export ───────────────────────────────
 
+OUTPUT_W=$((VIEWPORT_W * DPR))
+OUTPUT_H=$((VIEWPORT_H * DPR))
+
 if [[ "$MODE" == "portrait" ]]; then
-    info "Mode: portrait — captures at ${VIEWPORT_W}x${VIEWPORT_H}, wraps into ${CANVAS_W}x${CANVAS_H} canvas"
+    info "Mode: portrait — viewport ${VIEWPORT_W}x${VIEWPORT_H} @ ${DPR}x = ${OUTPUT_W}x${OUTPUT_H} ${FORMAT}"
+    info "  (deck's responsive CSS reflows for mobile viewport)"
 elif [[ "$MODE" == "square" ]]; then
-    info "Mode: square — captures at ${VIEWPORT_W}x${VIEWPORT_H}, wraps into ${CANVAS_W}x${CANVAS_H} canvas"
+    info "Mode: square — viewport ${VIEWPORT_W}x${VIEWPORT_H} @ ${DPR}x = ${OUTPUT_W}x${OUTPUT_H} ${FORMAT}"
+    info "  (deck's responsive CSS reflows for mobile viewport)"
 else
-    info "Mode: landscape — ${VIEWPORT_W}x${VIEWPORT_H} ${FORMAT}"
+    info "Mode: landscape — ${OUTPUT_W}x${OUTPUT_H} ${FORMAT}"
 fi
 
 info "Exporting..."
 echo ""
 
-node "$TEMP_SCRIPT" "$SERVE_DIR" "$HTML_FILENAME" "$OUTPUT_DIR" "$VIEWPORT_W" "$VIEWPORT_H" "$CANVAS_W" "$CANVAS_H" "$FORMAT" || {
+node "$TEMP_SCRIPT" "$SERVE_DIR" "$HTML_FILENAME" "$OUTPUT_DIR" "$VIEWPORT_W" "$VIEWPORT_H" "$DPR" "$FORMAT" || {
     err "Image export failed."
     rm -rf "$TEMP_DIR"
     exit 1
