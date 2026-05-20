@@ -159,6 +159,25 @@ Reference architecture for generating slide presentations. Every presentation fo
 </html>
 ```
 
+## Mobile Layout Conventions
+
+`viewport-base.css` provides several mobile-friendly defaults at `max-width: 600px`. Decks that follow these naming conventions get touch-friendly behavior automatically — no extra media queries needed:
+
+- **`.nav-dots`** — relocates from right-edge vertical rail to a centered bottom-bar pill with backdrop-blur. Ergonomic for one-handed swiping; doesn't overlap content at narrow widths.
+- **`pre`, `code`, `.code-block`, `.terminal`, `.term`** — long URLs and command lines wrap (`overflow-wrap: anywhere`) instead of blowing out the viewport.
+- **`.two-col`, `.compare`, `.side-by-side`, `.cards-2x2`, `.cards-grid`** — multi-column grids collapse to a single column.
+
+When designing dense slides (quote stacks, paired diff blocks, four-card overviews), also shrink monospace font sizes for phones explicitly via `clamp()`:
+
+```css
+@media (max-width: 600px) {
+    .code-block { font-size: clamp(0.66rem, 2.6vw, 0.78rem); }
+    .quote-card .quote-en { font-size: clamp(0.74rem, 2.4vw, 0.88rem); }
+}
+```
+
+`viewport-base.css` uses `!important` on its mobile overrides because preset CSS is inlined *after* the base file — without `!important`, equal-specificity selectors in your preset would silently win. Don't fight this: skip writing mobile-position overrides for `.nav-dots` in your preset and let the base handle it.
+
 ## Required JavaScript Features
 
 Every presentation must include:
