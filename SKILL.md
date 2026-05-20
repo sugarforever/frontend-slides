@@ -218,16 +218,17 @@ When converting PowerPoint files:
 
 ## Phase 6: Share & Export (Optional)
 
-After delivery, **ask the user:** _"Would you like to share this presentation? I can deploy it to a live URL (works on any device including phones) or export it as a PDF."_
+After delivery, **ask the user:** _"Would you like to share this presentation? I can deploy it to a live URL, export it as a PDF, or save each slide as a standalone image (for TikTok / Xiaohongshu / Instagram carousels)."_
 
 Options:
 
 - **Deploy to URL** — Shareable link that works on any device
 - **Export to PDF** — Universal file for email, Slack, print
-- **Both**
+- **Export as images** — Per-slide PNG/JPEG files for social media posts
+- **Multiple**
 - **No thanks**
 
-If the user declines, stop here. If they choose one or both, proceed below.
+If the user declines, stop here. If they choose one or more, proceed below.
 
 ### 6A: Deploy to a Live URL (Vercel)
 
@@ -307,6 +308,48 @@ This captures each slide as a screenshot and combines them into a PDF. Perfect f
   ```
   This renders at 1280×720 instead of 1920×1080, typically cutting file size by 50-70% with minimal visual difference.
 
+### 6C: Export as Per-Slide Images
+
+This captures each slide as a separate PNG (or JPEG) image — one file per slide. Perfect for TikTok / Reels / Xiaohongshu / Instagram carousel posts, where each platform wants a sequence of standalone images rather than a single PDF.
+
+1. **Run the export script:**
+
+   ```bash
+   bash scripts/export-images.sh <path-to-html> [output-dir]
+   ```
+
+   If no output directory is given, images go into `<deck-name>-images/` next to the HTML file.
+
+2. **What happens behind the scenes** (explain briefly):
+   - Same headless-browser machinery as PDF export
+   - Captures each slide at 1920×1080 by default
+   - Writes `slide-001.png`, `slide-002.png`, … into the output folder
+   - Opens the folder automatically when done
+
+3. **Choosing a mode** — Ask the user where they plan to post:
+
+   | Goal | Flag | Output |
+   |---|---|---|
+   | Blog headers, IG landscape, raw screenshots | _(default)_ | 1920×1080 PNG |
+   | Smaller file size | `--compact` | 1280×720 PNG |
+   | TikTok / Reels / Xiaohongshu vertical | `--portrait` | 1080×1920 (slide letterboxed on deck-colored background) |
+   | Instagram square / Xiaohongshu 1:1 | `--square` | 1080×1080 (slide letterboxed) |
+   | Smaller files for upload | `--format jpeg` | JPEG instead of PNG (typically 80–90% smaller) |
+
+   Flags combine: `--portrait --format jpeg` is the typical "TikTok-ready" combo.
+
+4. **Deliver the folder** — Tell the user:
+   - Folder location, image count, total size
+   - That each image is a self-contained post — drag-and-drop into the upload UI
+   - For carousels: most platforms accept the files in filename order (`slide-001` first)
+
+**⚠ Image export gotchas:**
+
+- **Same dependencies as PDF export.** Playwright + Chromium download happens once; subsequent runs are fast.
+- **Same `.slide` requirement.** The script finds slides via `.slide` selector.
+- **Portrait/square modes scale-down, not crop.** The slide is rendered at its native 16:9 then placed inside the larger vertical canvas with letterboxing. If a user wants the slide to fill the full canvas width (eating into the 9:16 frame), they'll need to redesign the deck for that aspect ratio rather than rely on this export.
+- **Letterbox color comes from the deck's `<body>` background.** Dark decks get dark bars, light decks get light bars. If the user wants a different fill color, they should change the body background before exporting.
+
 ---
 
 ## Supporting Files
@@ -320,3 +363,4 @@ This captures each slide as a screenshot and combines them into a PDF. Perfect f
 | [scripts/extract-pptx.py](scripts/extract-pptx.py) | Python script for PPT content extraction                             | Phase 4 (conversion)      |
 | [scripts/deploy.sh](scripts/deploy.sh)             | Deploy slides to Vercel for instant sharing                          | Phase 6 (sharing)         |
 | [scripts/export-pdf.sh](scripts/export-pdf.sh)     | Export slides to PDF                                                 | Phase 6 (sharing)         |
+| [scripts/export-images.sh](scripts/export-images.sh) | Export each slide as PNG/JPEG (landscape, portrait, or square)    | Phase 6 (sharing)         |
