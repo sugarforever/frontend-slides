@@ -109,9 +109,11 @@ img, .image-container {
         --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
     }
 
-    /* Hide non-essential elements */
+    /* Hide non-essential elements.
+       !important needed because preset CSS is inlined after
+       this file and would otherwise win on equal specificity. */
     .nav-dots, .keyboard-hint, .decorative {
-        display: none;
+        display: none !important;
     }
 }
 
@@ -136,6 +138,70 @@ img, .image-container {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===========================================
+   MOBILE PATTERNS
+   Touch-friendly defaults for phones / narrow viewports.
+   Uses !important because preset CSS is inlined AFTER this
+   file and would otherwise win on equal specificity.
+   =========================================== */
+
+/* Long URLs, file paths, and code lines must wrap so they
+   don't blow out the slide horizontally on phones. */
+@media (max-width: 600px) {
+    pre, code,
+    .code-block, .code-block .line,
+    .terminal, .term {
+        overflow-wrap: anywhere !important;
+        word-break: break-word;
+    }
+}
+
+/* Nav dots: vertical right-rail on desktop becomes a
+   horizontal bottom-bar pill on phones. This is more
+   ergonomic for one-handed swiping and stops the rail
+   from overlapping content at narrow widths. */
+@media (max-width: 600px) {
+    .nav-dots {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: clamp(0.6rem, 2vh, 1.2rem) !important;
+        transform: translateX(-50%) !important;
+        flex-direction: row !important;
+        gap: clamp(0.35rem, 1.5vw, 0.6rem) !important;
+        padding: clamp(0.35rem, 1vh, 0.55rem) clamp(0.6rem, 2vw, 0.9rem) !important;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 999px !important;
+        z-index: 90;
+    }
+}
+
+/* Common density-heavy layout classes collapse to one
+   column on phones. Decks that use these conventional
+   class names get mobile-stacking for free.
+   `grid-template-rows: auto` resets any explicit row
+   definitions (e.g. `repeat(2, 1fr)` on a 2x2 grid) so
+   stacked items size to their content instead of being
+   squeezed into the original row count. */
+@media (max-width: 600px) {
+    .two-col,
+    .compare,
+    .side-by-side,
+    .cards-2x2,
+    .cards-grid {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto !important;
+    }
+}
+
+/* Very short viewports already hide nav-dots via the
+   max-height: 600 rule above; that takes precedence
+   over this bottom-bar layout — landscape-phones stay
+   un-cluttered. */
 
 /* ===========================================
    REDUCED MOTION
