@@ -34,6 +34,22 @@ Avoid generic AI-generated aesthetics:
 
 Interpret creatively and make unexpected choices that feel genuinely designed for the context. Vary between light and dark themes, different fonts, different aesthetics. You still tend to converge on common choices (Space Grotesk, for example) across generations. Avoid this: it is critical that you think outside the box!
 
+## Narrated vs Self-Read — Progressive Disclosure
+
+A deck meant to be **narrated** (a live talk, a screen-recorded walkthrough) and one meant to be **self-read** are different artifacts — and the difference changes how content should appear.
+
+- **Self-read:** the reader sets their own pace. Put everything for a slide on the slide at once.
+- **Narrated:** the _speaker_ sets the pace. The deck should behave like a controllable surface that follows the narration — not a wall of content revealed all at once.
+
+For narrated decks, design for four dimensions of control. Each is a principle, not a prescribed component — implement whatever fits the specific deck:
+
+- **Pacing** — reveal content in step with the narration (e.g. list items, cards, or steps appear one at a time as the speaker advances), so the audience never reads ahead of the voice.
+- **Focus** — make salient only what is being discussed now (e.g. spotlight the active part of a diagram, dim the rest).
+- **Depth** — keep supporting detail off the main line, available on demand (e.g. an optional popup the speaker opens when a term needs unpacking), so the slide stays uncluttered.
+- **Structure** — keep the deck's macro-skeleton visible (e.g. a small persistent marker of where this slide sits in the overall argument), so the audience holds the thread.
+
+The throughline: **at any moment, show only what is relevant right now.** Decide per deck which dimensions are worth building — a short talk may need none; a dense teaching walkthrough benefits from all four. Build them fresh each time, sized to the content; do not ship a fixed widget.
+
 ## Viewport Fitting Rules
 
 These invariants apply to EVERY slide in EVERY presentation:
@@ -105,6 +121,15 @@ Do you need to edit text directly in the browser after generation? Options:
 - "No" — Presentation only, keeps file smaller
 
 **Remember the user's editing choice — it determines whether edit-related code is included in Phase 3.**
+
+**Question 5 — Delivery** (header: "Delivery"):
+Will this deck be narrated, or read on its own? Options:
+
+- "Narrated walkthrough" — a live talk or screen-recorded video; the speaker paces the audience
+- "Self-read" — the reader opens it alone and paces themselves
+- "Both"
+
+**If the deck is narrated, apply Progressive Disclosure (see above) in Phase 3** — pace the reveal to the narration rather than showing each slide's content all at once.
 
 If user has content, ask them to share it.
 
