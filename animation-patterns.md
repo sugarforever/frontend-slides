@@ -99,6 +99,34 @@ class TiltEffect {
 }
 ```
 
+## Prefer Native Platform Primitives
+
+Modern browsers ship interaction and motion capabilities natively. Reach for them before hand-rolling equivalents — you get correct behavior for free and write less, more robust code. This keeps the zero-dependency promise _and_ raises quality.
+
+- **Overlays / popups** → the native `<dialog>` element, not a hand-built div overlay. `dialog.showModal()` gives Esc-to-close, focus-trapping, top-layer stacking, and a stylable `::backdrop` — none of which you have to write.
+- **Enter / exit motion** → CSS `@keyframes` and `transition` (with `@starting-style` + `transition-behavior: allow-discrete` for elements entering/leaving the DOM), not a JS animation loop.
+- **Scroll-driven effects** → CSS scroll-snap and `animation-timeline: scroll()/view()` before scroll-event listeners.
+- **Disclosure widgets** → `<details>`/`<summary>` or the `popover` attribute before custom show/hide state.
+
+**Example — an on-demand detail popup.** Native `<dialog>` carries the behavior; CSS carries the motion:
+
+```html
+<dialog id="note" class="note">…content…</dialog>
+```
+
+```js
+trigger.addEventListener('click', () => document.getElementById('note').showModal());
+// Esc, focus-trap, and top-layer stacking all come free with showModal()
+```
+
+```css
+.note[open]     { animation: pop-in 0.4s cubic-bezier(.34, 1.56, .64, 1); }
+.note::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(3px); }
+@keyframes pop-in { from { opacity: 0; transform: scale(.9); } }
+```
+
+Hand-rolling the same overlay would mean manual Esc handling, a focus trap, a z-index stack, and a backdrop element — all of which the platform already does correctly. Treat the snippet as an _illustration of the principle_, not a component to paste verbatim.
+
 ## Troubleshooting
 
 | Problem | Fix |
